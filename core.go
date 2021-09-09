@@ -31,11 +31,14 @@ func main() {
 
 	go func() {
 		for {
-			err = booker.WriteJSON(&packet.Transport{KeeperID: "k1", Handler: "new_address"})
+			<-time.Tick(time.Second)
+			err = booker.WriteJSON(&packet.Packet{
+				Type:    packet.Request,
+				Payload: map[string]interface{}{"handler": "new_address", "keeper_id": "k1"},
+			})
 			if err != nil {
 				log.Println(err)
 			}
-			<-time.Tick(3 * time.Second)
 		}
 	}()
 
