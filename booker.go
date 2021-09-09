@@ -3,6 +3,7 @@ package main
 import (
 	"demo/packet"
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -17,6 +18,14 @@ func main() {
 	keepers = make(map[string]*websocket.Conn)
 	handleConnectKeeper()
 	handleWebsocket()
+
+	go func() {
+		for  {
+			<-time.Tick(4*time.Second)
+			fmt.Println(keepers)
+		}
+	}()
+
 	log.Fatalln(http.ListenAndServe(":8000", nil))
 }
 
@@ -28,10 +37,13 @@ func handleWebsocket() {
 		}
 		defer core.Close()
 		for {
-			_, r, err := core.NextReader()
+			mt, r, err := core.NextReader()
 			if err != nil {
 				log.Println(err)
 				break
+			}
+			if mt == websocket.CloseMessage {
+				log.Println("closing")
 			}
 			var p packet.Transport
 			if err := json.NewDecoder(r).Decode(&p); err != nil {
@@ -43,7 +55,12 @@ func handleWebsocket() {
 				//--------------->
 				keeper, ok := keepers[p.KeeperID]
 				if !ok {
-					log.Println(err)
+					msg := fmt.Sprintf("keeper %s is not found", p.KeeperID)
+					log.Println(msg)
+					if err := core.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+						log.Println(err)
+						break
+					}
 					continue
 				}
 				err = keeper.WriteMessage(websocket.TextMessage, []byte(p.Handler))
