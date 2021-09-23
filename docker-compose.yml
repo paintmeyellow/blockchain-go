@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+    minima:
+        container_name: minima
+        build:
+            context: .
+        ports:
+            - "9002:9002"
+            - "9003:9003"
+            - "9004:9004"
+            - "9005:9005"
+        volumes:
+            - ./minima:/root/.minima
