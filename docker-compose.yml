@@ -1,14 +1,39 @@
 version: "3"
 
 services:
-    minima:
+    paintmeyellow:
         restart: on-failure
-        container_name: minima
+        container_name: paintmeyellow
         build:
             context: .
+        volumes:
+            - ./paintmeyellow:/root/.minima
         ports:
             - "9001:9001"
             - "9002:9002"
             - "9003:9003"
             - "9004:9004"
-            - "9005:9005"
+    nikita:
+        restart: on-failure
+        container_name: nikita
+        build:
+            context: .
+        volumes:
+            - ./nikita:/root/.minima
+#        ports:
+#            - "9001:9001"
+#            - "9002:9002"
+#            - "9003:9003"
+#            - "9004:9004"
+    penspin:
+        restart: on-failure
+        container_name: penspin
+        build:
+            context: .
+        volumes:
+            - ./penspin:/root/.minima
+#        ports:
+#            - "9001:9001"
+#            - "9002:9002"
+#            - "9003:9003"
+#            - "9004:9004"
