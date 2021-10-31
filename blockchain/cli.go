@@ -1,65 +1,63 @@
 package blockchain
 
 import (
-	"flag"
+	"context"
 	"fmt"
-	"os"
+	"github.com/spf13/cobra"
 	"strconv"
 )
 
-type CLI struct {
+type cli struct {
 	BC *Blockchain
 }
 
-func (cli *CLI) Run() {
-	addBlockCmd := flag.NewFlagSet("addblock", flag.ExitOnError)
-	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
-	addBlockData := addBlockCmd.String("data", "", "Block data")
-	switch os.Args[1] {
-	case "addblock":
-		err := addBlockCmd.Parse(os.Args[2:])
-		if err != nil {
-			panic(err)
-		}
-	case "printchain":
-		err := printChainCmd.Parse(os.Args[2:])
-		if err != nil {
-			panic(err)
-		}
-	default:
-		os.Exit(1)
-	}
-
-	if addBlockCmd.Parsed() {
-		if *addBlockData == "" {
-			addBlockCmd.Usage()
-			os.Exit(1)
-		}
-		cli.addBlock(*addBlockData)
-	}
-
-	if printChainCmd.Parsed() {
-		cli.printChain()
-	}
+func NewCLI(bc *Blockchain) *cli {
+	return &cli{BC: bc}
 }
 
-func (cli *CLI) addBlock(data string) {
-	cli.BC.AddBlock(data)
-	fmt.Println("Success!")
+func (cli *cli) Run(ctx context.Context) error {
+	rootCmd := &cobra.Command{
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd:   true,
+		},
+	}
+	rootCmd.AddCommand(cli.addBlock())
+	rootCmd.AddCommand(cli.printChain())
+	return rootCmd.ExecuteContext(ctx)
 }
 
-func (cli *CLI) printChain() {
-	bci := cli.BC.Iterator()
-	for {
-		block := bci.Next()
-		fmt.Printf("Prev: %x\n", block.PrevBlockHash)
-		fmt.Printf("Data: %s\n", block.Data)
-		fmt.Printf("Hash: %x\n", block.Hash)
-		pow := NewProofOfWork(block)
-		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
-		fmt.Println()
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
+func (cli *cli) addBlock() *cobra.Command {
+	var data string
+	cmd := cobra.Command{
+		Use:   "addblock",
+		Short: "Add block to blockchain",
+		Run: func(cmd *cobra.Command, args []string) {
+			cli.BC.AddBlock(data)
+			fmt.Println("Success!")
+		},
+	}
+	cmd.PersistentFlags().StringVarP(&data, "data", "d", "", "Block data")
+	return &cmd
+}
+
+func (cli *cli) printChain() *cobra.Command {
+	return &cobra.Command{
+		Use:   "printchain",
+		Short: "Print blockchain",
+		Run: func(cmd *cobra.Command, args []string) {
+			bci := cli.BC.Iterator()
+			for {
+				block := bci.Next()
+				fmt.Printf("Prev: %x\n", block.PrevBlockHash)
+				fmt.Printf("Data: %s\n", block.Data)
+				fmt.Printf("Hash: %x\n", block.Hash)
+				pow := NewProofOfWork(block)
+				fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+				fmt.Println()
+				if len(block.PrevBlockHash) == 0 {
+					break
+				}
+			}
+		},
 	}
 }
