@@ -7,10 +7,13 @@ import (
 )
 
 type cli struct {
+	dbFile string
 }
 
 func NewCLI() *cli {
-	return &cli{}
+	return &cli{
+		dbFile: "blockchain.db",
+	}
 }
 
 func (cli *cli) Run(ctx context.Context) error {
@@ -27,8 +30,13 @@ func (cli *cli) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	payto, err := cli.payto()
+	if err != nil {
+		return err
+	}
 	rootCmd.AddCommand(createBlockchainCmd)
 	rootCmd.AddCommand(balanceCmd)
+	rootCmd.AddCommand(payto)
 	return rootCmd.ExecuteContext(ctx)
 }
 
@@ -38,7 +46,7 @@ func (cli *cli) balance() (*cobra.Command, error) {
 		Use:   "balance",
 		Short: "Get address balance",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bc, err := NewBlockchain()
+			bc, err := NewBlockchain(cli.dbFile)
 			if err != nil {
 				return err
 			}
@@ -59,13 +67,54 @@ func (cli *cli) balance() (*cobra.Command, error) {
 	return &cmd, nil
 }
 
+func (cli *cli) payto() (*cobra.Command, error) {
+	var (
+		from   string
+		to     string
+		amount int
+	)
+	cmd := cobra.Command{
+		Use:   "payto",
+		Short: "Pay to address",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			bc, err := NewBlockchain(cli.dbFile)
+			if err != nil {
+				return err
+			}
+			defer bc.DB.Close()
+			tx, err := NewTx(from, to, amount, bc)
+			if err != nil {
+				return err
+			}
+			if err = bc.MineBlock([]*Tx{tx}); err != nil {
+				return err
+			}
+			fmt.Println("Success!")
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&from, "from", "", "", "From address")
+	cmd.Flags().StringVarP(&to, "to", "", "", "To address")
+	cmd.Flags().IntVarP(&amount, "amount", "", 0, "Amount")
+	if err := cmd.MarkFlagRequired("from"); err != nil {
+		return nil, err
+	}
+	if err := cmd.MarkFlagRequired("to"); err != nil {
+		return nil, err
+	}
+	if err := cmd.MarkFlagRequired("amount"); err != nil {
+		return nil, err
+	}
+	return &cmd, nil
+}
+
 func (cli *cli) createBlockchain() (*cobra.Command, error) {
 	var addr string
 	cmd := cobra.Command{
 		Use:   "createblockchain",
 		Short: "Create new blockchain",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bc, err := CreateBlockchain(addr)
+			bc, err := CreateBlockchain(addr, cli.dbFile)
 			if err != nil {
 				return err
 			}

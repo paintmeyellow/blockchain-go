@@ -12,7 +12,6 @@ var (
 )
 
 const (
-	dbFile              = "bolt-blockchain"
 	blocksBucket        = "blocks"
 	genesisCoinbaseData = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
 )
@@ -22,7 +21,7 @@ type Blockchain struct {
 	DB  *bolt.DB
 }
 
-func CreateBlockchain(address string) (*Blockchain, error) {
+func CreateBlockchain(address, dbFile string) (*Blockchain, error) {
 	if dbExists(dbFile) {
 		return nil, ErrBlockchainAlreadyExists
 	}
@@ -56,7 +55,7 @@ func CreateBlockchain(address string) (*Blockchain, error) {
 	return &Blockchain{tip: tip, DB: db}, nil
 }
 
-func NewBlockchain() (*Blockchain, error) {
+func NewBlockchain(dbFile string) (*Blockchain, error) {
 	var tip []byte
 	db, err := bolt.Open(dbFile, 0600, nil)
 	if err != nil {
@@ -74,29 +73,38 @@ func NewBlockchain() (*Blockchain, error) {
 	return &Blockchain{tip: tip, DB: db}, nil
 }
 
-func (bc *Blockchain) AddBlock(txs []*Tx) {
+func (bc *Blockchain) MineBlock(txs []*Tx) error {
 	var lastHash []byte
-	_ = bc.DB.View(func(tx *bolt.Tx) error {
+	err := bc.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		lastHash = b.Get([]byte("l"))
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 	newBlock := NewBlock(txs, lastHash)
-	_ = bc.DB.Update(func(tx *bolt.Tx) error {
+	err = bc.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
-		_ = b.Put(newBlock.Hash, newBlock.Serialize())
-		_ = b.Put([]byte("l"), newBlock.Hash)
+		if err = b.Put(newBlock.Hash, newBlock.Serialize()); err != nil {
+			return err
+		}
+		if err = b.Put([]byte("l"), newBlock.Hash); err != nil {
+			return err
+		}
 		bc.tip = newBlock.Hash
 		return nil
 	})
+	return err
 }
 
 func (bc *Blockchain) UnspentTxs(address string) []*Tx {
 	var unspentTXs []*Tx
+	var block *Block
 	spentTXOs := make(map[string][]int)
 	bci := bc.Iterator()
 	for {
-		block := bci.Next()
+		block = bci.Next()
 		for _, tx := range block.Transactions {
 			txID := hex.EncodeToString(tx.ID)
 		Outputs:
@@ -126,17 +134,36 @@ func (bc *Blockchain) UnspentTxs(address string) []*Tx {
 	return unspentTXs
 }
 
-func (bc *Blockchain) UTXO(address string) []*TxOutput {
-	var outs []*TxOutput
+func (bc *Blockchain) UTXO(address string) []TxOutput {
+	var outs []TxOutput
 	txs := bc.UnspentTxs(address)
 	for _, tx := range txs {
 		for _, out := range tx.Vout {
 			if out.CanBeUnlockedWith(address) {
-				outs = append(outs, &out)
+				outs = append(outs, out)
 			}
 		}
 	}
 	return outs
+}
+
+// SpendableOutputs returns map[txID][]vout
+func (bc *Blockchain) SpendableOutputs(addr string, amount int) (acc int, utxo map[string][]int) {
+	utxo = make(map[string][]int)
+	unspentTXs := bc.UnspentTxs(addr)
+	for _, tx := range unspentTXs {
+		txID := hex.EncodeToString(tx.ID)
+		for outIdx, out := range tx.Vout {
+			if out.CanBeUnlockedWith(addr) && acc < amount {
+				acc += out.Value
+				utxo[txID] = append(utxo[txID], outIdx)
+				if acc >= amount {
+					return
+				}
+			}
+		}
+	}
+	return
 }
 
 func (bc *Blockchain) Iterator() *Iterator {
