@@ -5,11 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
-	"errors"
 	"fmt"
 )
-
-var ErrNotEnoughFunds = errors.New("blockchain: not enough funds")
 
 type Tx struct {
 	ID   []byte
@@ -19,14 +16,10 @@ type Tx struct {
 
 const reward = 50
 
-func NewTx(from, to string, amount int, bc *Blockchain) (*Tx, error) {
+func NewTx(from, to string, amount int, acc int, utxo map[string][]int) (*Tx, error) {
 	var inputs []TxInput
 	var outputs []TxOutput
-	acc, spendableOuts := bc.SpendableOutputs(from, amount)
-	if acc < amount {
-		return nil, ErrNotEnoughFunds
-	}
-	for txid, outs := range spendableOuts {
+	for txid, outs := range utxo {
 		txID, err := hex.DecodeString(txid)
 		if err != nil {
 			return nil, err

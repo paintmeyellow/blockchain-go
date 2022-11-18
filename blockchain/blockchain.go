@@ -2,13 +2,8 @@ package blockchain
 
 import (
 	"encoding/hex"
-	"errors"
-	"github.com/boltdb/bolt"
-	"os"
-)
 
-var (
-	ErrBlockchainAlreadyExists = errors.New("blockchain already exists")
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -18,20 +13,13 @@ const (
 
 type Blockchain struct {
 	tip []byte
-	DB  *bolt.DB
+	db  *bolt.DB
 }
 
-func CreateBlockchain(address, dbFile string) (*Blockchain, error) {
-	if dbExists(dbFile) {
-		return nil, ErrBlockchainAlreadyExists
-	}
+func Create(addr string, db *bolt.DB) (*Blockchain, error) {
 	var tip []byte
-	db, err := bolt.Open(dbFile, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		coinbase, err := NewCoinbaseTx(address, genesisCoinbaseData)
+	err := db.Update(func(tx *bolt.Tx) error {
+		coinbase, err := NewCoinbaseTx(addr, genesisCoinbaseData)
 		if err != nil {
 			return err
 		}
@@ -52,16 +40,12 @@ func CreateBlockchain(address, dbFile string) (*Blockchain, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Blockchain{tip: tip, DB: db}, nil
+	return &Blockchain{tip: tip, db: db}, nil
 }
 
-func NewBlockchain(dbFile string) (*Blockchain, error) {
+func Open(db *bolt.DB) (*Blockchain, error) {
 	var tip []byte
-	db, err := bolt.Open(dbFile, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
-	err = db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		if b := tx.Bucket([]byte(blocksBucket)); b != nil {
 			tip = b.Get([]byte("l"))
 		}
@@ -70,12 +54,12 @@ func NewBlockchain(dbFile string) (*Blockchain, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Blockchain{tip: tip, DB: db}, nil
+	return &Blockchain{tip: tip, db: db}, nil
 }
 
 func (bc *Blockchain) MineBlock(txs []*Tx) error {
 	var lastHash []byte
-	err := bc.DB.View(func(tx *bolt.Tx) error {
+	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		lastHash = b.Get([]byte("l"))
 		return nil
@@ -84,7 +68,7 @@ func (bc *Blockchain) MineBlock(txs []*Tx) error {
 		return err
 	}
 	newBlock := NewBlock(txs, lastHash)
-	err = bc.DB.Update(func(tx *bolt.Tx) error {
+	err = bc.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		if err = b.Put(newBlock.Hash, newBlock.Serialize()); err != nil {
 			return err
@@ -166,10 +150,18 @@ func (bc *Blockchain) SpendableOutputs(addr string, amount int) (acc int, utxo m
 	return
 }
 
+func (bc *Blockchain) Close() {
+	if bc.db != nil {
+		if err := bc.db.Close(); err != nil {
+
+		}
+	}
+}
+
 func (bc *Blockchain) Iterator() *Iterator {
 	return &Iterator{
 		currentHash: bc.tip,
-		db:          bc.DB,
+		db:          bc.db,
 	}
 }
 
@@ -188,11 +180,4 @@ func (i *Iterator) Next() *Block {
 	})
 	i.currentHash = block.PrevBlockHash
 	return block
-}
-
-func dbExists(dbFile string) bool {
-	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
-		return false
-	}
-	return true
 }
