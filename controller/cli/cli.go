@@ -2,10 +2,11 @@ package cli
 
 import (
 	"context"
-	"demo/usecase"
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"blockchain-go/usecase"
 )
 
 type cli struct {

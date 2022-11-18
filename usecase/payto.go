@@ -2,8 +2,9 @@ package usecase
 
 import (
 	"context"
-	"demo/blockchain"
 	"errors"
+
+	"blockchain-go/blockchain"
 )
 
 var errNotEnoughFunds = errors.New("blockchain: not enough funds")

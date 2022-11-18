@@ -12,9 +12,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
-	"demo/blockchain"
-	"demo/cli"
-	"demo/usecase"
+	"blockchain-go/blockchain"
+	"blockchain-go/controller/cli"
+	"blockchain-go/usecase"
 )
 
 const (

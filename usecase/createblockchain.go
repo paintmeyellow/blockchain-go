@@ -1,9 +1,9 @@
 package usecase
 
 import (
-	"demo/blockchain"
-
 	"github.com/boltdb/bolt"
+
+	"blockchain-go/blockchain"
 )
 
 type CreateBlockchainUcase struct {

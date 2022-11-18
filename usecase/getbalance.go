@@ -2,7 +2,8 @@ package usecase
 
 import (
 	"context"
-	"demo/blockchain"
+
+	"blockchain-go/blockchain"
 )
 
 type GetBalanceBC interface {
