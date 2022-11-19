@@ -19,7 +19,7 @@ import (
 
 const (
 	jaegerCollectorURL = "http://localhost:14268/api/traces"
-	serviceName        = "blockchain-demo"
+	serviceName        = "demo"
 	serviceVersion     = "v0.0.1"
 	environment        = "development"
 )
@@ -61,15 +61,17 @@ func main() {
 	}
 
 	// setup dependencies
-	bc, err := blockchain.Open(db)
+	bc := blockchain.New(db)
+
+	opened, err := blockchain.Open(db)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	// create and start CLI
 	client := cli.New(
-		usecase.NewGetBalanceUcase(bc),
-		usecase.NewPayToUcase(bc),
-		usecase.NewCreateBlockchainUcase(db),
+		usecase.NewGetBalanceUcase(opened),
+		usecase.NewPayToUcase(opened),
+		usecase.NewCreateBlockchainUcase(bc),
 	)
 	if err := client.Run(context.Background()); err != nil {
 		log.Fatalln(err)

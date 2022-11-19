@@ -10,8 +10,8 @@ import (
 var errNotEnoughFunds = errors.New("blockchain: not enough funds")
 
 type PayToBC interface {
-	SpendableOutputs(addr string, amount int) (acc int, utxo map[string][]int)
-	MineBlock(txs []*blockchain.Tx) error
+	SpendableOutputs(ctx context.Context, addr string, amount int) (acc int, utxo map[string][]int)
+	MineBlock(ctx context.Context, txs []*blockchain.Tx) error
 }
 
 type PayToUcase struct {
@@ -23,7 +23,7 @@ func NewPayToUcase(bc PayToBC) *PayToUcase {
 }
 
 func (ucase PayToUcase) Handle(ctx context.Context, from, to string, amount int) error {
-	acc, utxo := ucase.bc.SpendableOutputs(from, amount)
+	acc, utxo := ucase.bc.SpendableOutputs(ctx, from, amount)
 	if acc < amount {
 		return errNotEnoughFunds
 	}
@@ -31,7 +31,7 @@ func (ucase PayToUcase) Handle(ctx context.Context, from, to string, amount int)
 	if err != nil {
 		return err
 	}
-	if err = ucase.bc.MineBlock([]*blockchain.Tx{tx}); err != nil {
+	if err = ucase.bc.MineBlock(ctx, []*blockchain.Tx{tx}); err != nil {
 		return err
 	}
 	return nil

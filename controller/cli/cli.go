@@ -6,16 +6,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"blockchain-go/usecase"
 )
-
-const tracerName = "cli"
 
 type cli struct {
 	getBalanceUcase       *usecase.GetBalanceUcase
 	payToUcase            *usecase.PayToUcase
 	createBlockchainUcase *usecase.CreateBlockchainUcase
+	tr                    trace.Tracer
 }
 
 func New(
@@ -27,6 +29,7 @@ func New(
 		getBalanceUcase:       getBalanceUcase,
 		payToUcase:            payToUcase,
 		createBlockchainUcase: createBlockchainUcase,
+		tr:                    otel.Tracer("cli"),
 	}
 }
 
@@ -36,7 +39,7 @@ func (cli *cli) Run(ctx context.Context) error {
 			DisableDefaultCmd: true,
 		},
 	}
-	createBlockchainCmd, err := cli.createBlockchain(ctx)
+	createBlockchainCmd, err := cli.createChain(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,17 +58,16 @@ func (cli *cli) Run(ctx context.Context) error {
 }
 
 func (cli *cli) balance(ctx context.Context) (*cobra.Command, error) {
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "balance")
-	defer span.End()
-
 	var addr string
 	cmd := cobra.Command{
 		Use:   "balance",
 		Short: "Get address balance",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Run: func(_ *cobra.Command, _ []string) {
+			ctx, span := cli.tr.Start(ctx, "cmd.balance")
+			defer span.End()
+			span.SetAttributes(attribute.String("addr", addr))
 			balance := cli.getBalanceUcase.Handle(ctx, addr)
 			fmt.Printf("Balance of '%s': %d\n", addr, balance.Value)
-			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&addr, "addr", "", "", "Balance address")
@@ -84,14 +86,19 @@ func (cli *cli) payto(ctx context.Context) (*cobra.Command, error) {
 	cmd := cobra.Command{
 		Use:   "payto",
 		Short: "Pay to address",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			ctx := context.Background()
-			err := cli.payToUcase.Handle(ctx, from, to, amount)
-			if err != nil {
-				return err
+		Run: func(_ *cobra.Command, _ []string) {
+			ctx, span := cli.tr.Start(ctx, "cmd.payto")
+			defer span.End()
+			span.SetAttributes(
+				attribute.String("from", from),
+				attribute.String("to", to),
+				attribute.Int("amount", amount),
+			)
+			if err := cli.payToUcase.Handle(ctx, from, to, amount); err != nil {
+				span.RecordError(err)
+				return
 			}
 			fmt.Println("Success!")
-			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&from, "from", "", "", "From address")
@@ -109,18 +116,20 @@ func (cli *cli) payto(ctx context.Context) (*cobra.Command, error) {
 	return &cmd, nil
 }
 
-func (cli *cli) createBlockchain(ctx context.Context) (*cobra.Command, error) {
+func (cli *cli) createChain(ctx context.Context) (*cobra.Command, error) {
 	var addr string
 	cmd := cobra.Command{
-		Use:   "createblockchain",
+		Use:   "create-chain",
 		Short: "Create new blockchain",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			err := cli.createBlockchainUcase.Handle(addr)
-			if err != nil {
-				return err
+		Run: func(_ *cobra.Command, _ []string) {
+			ctx, span := cli.tr.Start(ctx, "cmd.create-chain")
+			defer span.End()
+			if err := cli.createBlockchainUcase.Handle(ctx, addr); err != nil {
+				span.SetStatus(codes.Error, "operation failed")
+				span.RecordError(err)
+				return
 			}
-			fmt.Println("Done!")
-			return nil
+			fmt.Println("Success!")
 		},
 	}
 	cmd.Flags().StringVarP(&addr, "addr", "", "", "Rewards address")

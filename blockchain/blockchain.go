@@ -1,9 +1,11 @@
 package blockchain
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/boltdb/bolt"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -14,11 +16,16 @@ const (
 type Blockchain struct {
 	tip []byte
 	db  *bolt.DB
+	tr  trace.Tracer
 }
 
-func Create(addr string, db *bolt.DB) (*Blockchain, error) {
+func New(db *bolt.DB) *Blockchain {
+	return &Blockchain{db: db}
+}
+
+func (bc *Blockchain) Create(ctx context.Context, addr string) error {
 	var tip []byte
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := bc.db.Update(func(tx *bolt.Tx) error {
 		coinbase, err := NewCoinbaseTx(addr, genesisCoinbaseData)
 		if err != nil {
 			return err
@@ -38,9 +45,10 @@ func Create(addr string, db *bolt.DB) (*Blockchain, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Blockchain{tip: tip, db: db}, nil
+	bc.tip = tip
+	return nil
 }
 
 func Open(db *bolt.DB) (*Blockchain, error) {
@@ -57,7 +65,7 @@ func Open(db *bolt.DB) (*Blockchain, error) {
 	return &Blockchain{tip: tip, db: db}, nil
 }
 
-func (bc *Blockchain) MineBlock(txs []*Tx) error {
+func (bc *Blockchain) MineBlock(ctx context.Context, txs []*Tx) error {
 	var lastHash []byte
 	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -82,7 +90,7 @@ func (bc *Blockchain) MineBlock(txs []*Tx) error {
 	return err
 }
 
-func (bc *Blockchain) UnspentTxs(address string) []*Tx {
+func (bc *Blockchain) UnspentTxs(ctx context.Context, address string) []*Tx {
 	var unspentTXs []*Tx
 	var block *Block
 	spentTXOs := make(map[string][]int)
@@ -118,9 +126,9 @@ func (bc *Blockchain) UnspentTxs(address string) []*Tx {
 	return unspentTXs
 }
 
-func (bc *Blockchain) UTXO(address string) []TxOutput {
+func (bc *Blockchain) UTXO(ctx context.Context, address string) []TxOutput {
 	var outs []TxOutput
-	txs := bc.UnspentTxs(address)
+	txs := bc.UnspentTxs(ctx, address)
 	for _, tx := range txs {
 		for _, out := range tx.Vout {
 			if out.CanBeUnlockedWith(address) {
@@ -132,9 +140,9 @@ func (bc *Blockchain) UTXO(address string) []TxOutput {
 }
 
 // SpendableOutputs returns map[txID][]vout
-func (bc *Blockchain) SpendableOutputs(addr string, amount int) (acc int, utxo map[string][]int) {
+func (bc *Blockchain) SpendableOutputs(ctx context.Context, addr string, amount int) (acc int, utxo map[string][]int) {
 	utxo = make(map[string][]int)
-	unspentTXs := bc.UnspentTxs(addr)
+	unspentTXs := bc.UnspentTxs(ctx, addr)
 	for _, tx := range unspentTXs {
 		txID := hex.EncodeToString(tx.ID)
 		for outIdx, out := range tx.Vout {
