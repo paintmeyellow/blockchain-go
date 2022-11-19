@@ -5,9 +5,12 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
 
 	"blockchain-go/usecase"
 )
+
+const tracerName = "cli"
 
 type cli struct {
 	getBalanceUcase       *usecase.GetBalanceUcase
@@ -33,15 +36,15 @@ func (cli *cli) Run(ctx context.Context) error {
 			DisableDefaultCmd: true,
 		},
 	}
-	createBlockchainCmd, err := cli.createBlockchain()
+	createBlockchainCmd, err := cli.createBlockchain(ctx)
 	if err != nil {
 		return err
 	}
-	balanceCmd, err := cli.balance()
+	balanceCmd, err := cli.balance(ctx)
 	if err != nil {
 		return err
 	}
-	payto, err := cli.payto()
+	payto, err := cli.payto(ctx)
 	if err != nil {
 		return err
 	}
@@ -51,13 +54,15 @@ func (cli *cli) Run(ctx context.Context) error {
 	return rootCmd.ExecuteContext(ctx)
 }
 
-func (cli *cli) balance() (*cobra.Command, error) {
+func (cli *cli) balance(ctx context.Context) (*cobra.Command, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "balance")
+	defer span.End()
+
 	var addr string
 	cmd := cobra.Command{
 		Use:   "balance",
 		Short: "Get address balance",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			ctx := context.Background()
 			balance := cli.getBalanceUcase.Handle(ctx, addr)
 			fmt.Printf("Balance of '%s': %d\n", addr, balance.Value)
 			return nil
@@ -70,7 +75,7 @@ func (cli *cli) balance() (*cobra.Command, error) {
 	return &cmd, nil
 }
 
-func (cli *cli) payto() (*cobra.Command, error) {
+func (cli *cli) payto(ctx context.Context) (*cobra.Command, error) {
 	var (
 		from   string
 		to     string
@@ -104,7 +109,7 @@ func (cli *cli) payto() (*cobra.Command, error) {
 	return &cmd, nil
 }
 
-func (cli *cli) createBlockchain() (*cobra.Command, error) {
+func (cli *cli) createBlockchain(ctx context.Context) (*cobra.Command, error) {
 	var addr string
 	cmd := cobra.Command{
 		Use:   "createblockchain",
