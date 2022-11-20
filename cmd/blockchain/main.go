@@ -62,11 +62,11 @@ func main() {
 
 	// setup dependencies
 	bc := blockchain.New(db)
-
 	opened, err := blockchain.Open(db)
 	if err != nil {
 		log.Fatalln(err)
 	}
+
 	// create and start CLI
 	client := cli.New(
 		usecase.NewGetBalanceUcase(opened),
