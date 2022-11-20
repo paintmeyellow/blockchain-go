@@ -2,9 +2,13 @@ package blockchain
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/gob"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Block struct {
@@ -13,6 +17,7 @@ type Block struct {
 	PrevBlockHash []byte
 	Hash          []byte
 	Nonce         int
+	tr            trace.Tracer
 }
 
 func NewBlock(txs []*Tx, prevBlockHash []byte) *Block {
@@ -22,16 +27,23 @@ func NewBlock(txs []*Tx, prevBlockHash []byte) *Block {
 		PrevBlockHash: prevBlockHash,
 		Hash:          []byte{},
 		Nonce:         0,
+		tr:            otel.Tracer("blockchain"),
 	}
-	pow := NewProofOfWork(block)
-	nonce, hash := pow.Run()
-	block.Hash = hash[:]
-	block.Nonce = nonce
 	return block
 }
 
 func NewGenesisBlock(coinbase *Tx) *Block {
-	return NewBlock([]*Tx{coinbase}, nil)
+	b := NewBlock([]*Tx{coinbase}, nil)
+	return b
+}
+
+func (b *Block) Mine(ctx context.Context) {
+	ctx, span := b.tr.Start(ctx, "Block.Mine")
+	defer span.End()
+	pow := NewProofOfWork(b)
+	nonce, hash := pow.Run(ctx)
+	b.Hash = hash[:]
+	b.Nonce = nonce
 }
 
 func (b *Block) HashTransactions() []byte {

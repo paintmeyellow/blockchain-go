@@ -2,18 +2,23 @@ package blockchain
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"math"
 	"math/big"
 	"strconv"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-const targetBits = 22
+const targetBits = 20
 
 type ProofOfWork struct {
 	block  *Block
 	target *big.Int
+	tr     trace.Tracer
 }
 
 func NewProofOfWork(b *Block) *ProofOfWork {
@@ -22,6 +27,7 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 	return &ProofOfWork{
 		block:  b,
 		target: target,
+		tr:     otel.Tracer("pow"),
 	}
 }
 
@@ -35,7 +41,10 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 	}, []byte{})
 }
 
-func (pow *ProofOfWork) Run() (int, []byte) {
+func (pow *ProofOfWork) Run(ctx context.Context) (int, []byte) {
+	_, span := pow.tr.Start(ctx, "ProofOfWork.Run")
+	defer span.End()
+
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0

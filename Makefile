@@ -1,3 +1,5 @@
+demo: init balance payto
+
 init:
 	rm blockchain.db || true
 	go run cmd/blockchain/main.go create-chain --addr 0x001

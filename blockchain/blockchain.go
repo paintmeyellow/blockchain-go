@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 
 	"github.com/boltdb/bolt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -20,28 +22,60 @@ type Blockchain struct {
 }
 
 func New(db *bolt.DB) *Blockchain {
-	return &Blockchain{db: db}
+	return &Blockchain{
+		db: db,
+		tr: otel.Tracer("blockchain"),
+	}
 }
 
 func (bc *Blockchain) Create(ctx context.Context, addr string) error {
+	ctx, span := bc.tr.Start(ctx, "Blockchain.Create")
+	defer span.End()
+
 	var tip []byte
 	err := bc.db.Update(func(tx *bolt.Tx) error {
 		coinbase, err := NewCoinbaseTx(addr, genesisCoinbaseData)
 		if err != nil {
+			span.SetStatus(codes.Error, "new coinbase tx")
+			span.RecordError(err)
 			return err
 		}
 		genesis := NewGenesisBlock(coinbase)
+		genesis.Mine(ctx)
 		b, err := tx.CreateBucket([]byte(blocksBucket))
 		if err != nil {
+			span.SetStatus(codes.Error, "create bucket")
+			span.RecordError(err)
 			return err
 		}
 		if err = b.Put(genesis.Hash, genesis.Serialize()); err != nil {
+			span.SetStatus(codes.Error, "write block data")
+			span.RecordError(err)
 			return err
 		}
 		if err = b.Put([]byte("l"), genesis.Hash); err != nil {
+			span.SetStatus(codes.Error, "write block header")
+			span.RecordError(err)
 			return err
 		}
 		tip = genesis.Hash
+		return nil
+	})
+	if err != nil {
+		span.SetStatus(codes.Error, "execute db transaction")
+		span.RecordError(err)
+		return err
+	}
+	bc.tip = tip
+	return nil
+}
+
+func (bc *Blockchain) Open() error {
+	var tip []byte
+	err := bc.db.Update(func(tx *bolt.Tx) error {
+		if b := tx.Bucket([]byte(blocksBucket)); b != nil {
+			tip = b.Get([]byte("l"))
+		}
 		return nil
 	})
 	if err != nil {
@@ -51,21 +85,9 @@ func (bc *Blockchain) Create(ctx context.Context, addr string) error {
 	return nil
 }
 
-func Open(db *bolt.DB) (*Blockchain, error) {
-	var tip []byte
-	err := db.Update(func(tx *bolt.Tx) error {
-		if b := tx.Bucket([]byte(blocksBucket)); b != nil {
-			tip = b.Get([]byte("l"))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &Blockchain{tip: tip, db: db}, nil
-}
-
 func (bc *Blockchain) MineBlock(ctx context.Context, txs []*Tx) error {
+	ctx, span := bc.tr.Start(ctx, "Blockchain.MineBlock")
+	defer span.End()
 	var lastHash []byte
 	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -76,6 +98,7 @@ func (bc *Blockchain) MineBlock(ctx context.Context, txs []*Tx) error {
 		return err
 	}
 	newBlock := NewBlock(txs, lastHash)
+	newBlock.Mine(ctx)
 	err = bc.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		if err = b.Put(newBlock.Hash, newBlock.Serialize()); err != nil {
@@ -91,6 +114,8 @@ func (bc *Blockchain) MineBlock(ctx context.Context, txs []*Tx) error {
 }
 
 func (bc *Blockchain) UnspentTxs(ctx context.Context, address string) []*Tx {
+	_, span := bc.tr.Start(ctx, "Blockchain.UnspentTxs")
+	defer span.End()
 	var unspentTXs []*Tx
 	var block *Block
 	spentTXOs := make(map[string][]int)
@@ -127,6 +152,8 @@ func (bc *Blockchain) UnspentTxs(ctx context.Context, address string) []*Tx {
 }
 
 func (bc *Blockchain) UTXO(ctx context.Context, address string) []TxOutput {
+	ctx, span := bc.tr.Start(ctx, "Blockchain.UTXO")
+	defer span.End()
 	var outs []TxOutput
 	txs := bc.UnspentTxs(ctx, address)
 	for _, tx := range txs {
@@ -141,6 +168,8 @@ func (bc *Blockchain) UTXO(ctx context.Context, address string) []TxOutput {
 
 // SpendableOutputs returns map[txID][]vout
 func (bc *Blockchain) SpendableOutputs(ctx context.Context, addr string, amount int) (acc int, utxo map[string][]int) {
+	ctx, span := bc.tr.Start(ctx, "Blockchain.SpendableOutputs")
+	defer span.End()
 	utxo = make(map[string][]int)
 	unspentTXs := bc.UnspentTxs(ctx, addr)
 	for _, tx := range unspentTXs {
@@ -156,14 +185,6 @@ func (bc *Blockchain) SpendableOutputs(ctx context.Context, addr string, amount 
 		}
 	}
 	return
-}
-
-func (bc *Blockchain) Close() {
-	if bc.db != nil {
-		if err := bc.db.Close(); err != nil {
-
-		}
-	}
 }
 
 func (bc *Blockchain) Iterator() *Iterator {

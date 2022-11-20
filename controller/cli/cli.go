@@ -61,7 +61,7 @@ func (cli *cli) balance(ctx context.Context) (*cobra.Command, error) {
 		Use:   "balance",
 		Short: "Get address balance",
 		Run: func(cmd *cobra.Command, _ []string) {
-			ctx, span := cli.tr.Start(ctx, "cmd.balance")
+			ctx, span := cli.tr.Start(ctx, "cli.balance")
 			defer span.End()
 			balance := cli.getBalanceUcase.Handle(ctx, addr)
 			cmd.Printf("Balance of '%s': %d\n", addr, balance.Value)
@@ -84,7 +84,7 @@ func (cli *cli) payto(ctx context.Context) (*cobra.Command, error) {
 		Use:   "payto",
 		Short: "Pay to address",
 		Run: func(cmd *cobra.Command, _ []string) {
-			ctx, span := cli.tr.Start(ctx, "cmd.payto")
+			ctx, span := cli.tr.Start(ctx, "cli.payto")
 			defer span.End()
 			if err := cli.payToUcase.Handle(ctx, from, to, amount); err != nil {
 				span.RecordError(err)
@@ -115,7 +115,7 @@ func (cli *cli) createChain(ctx context.Context) (*cobra.Command, error) {
 		Use:   "create-chain",
 		Short: "Create new blockchain",
 		Run: func(cmd *cobra.Command, _ []string) {
-			ctx, span := cli.tr.Start(ctx, "cmd.create-chain")
+			ctx, span := cli.tr.Start(ctx, "cli.createChain")
 			defer span.End()
 			if err := cli.createBlockchainUcase.Handle(ctx, addr); err != nil {
 				span.SetStatus(codes.Error, "operation failed")

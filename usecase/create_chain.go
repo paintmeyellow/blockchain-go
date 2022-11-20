@@ -24,8 +24,14 @@ func NewCreateBlockchainUcase(bc *blockchain.Blockchain) *CreateBlockchainUcase 
 }
 
 func (ucase *CreateBlockchainUcase) Handle(ctx context.Context, addr string) error {
-	ctx, span := ucase.tr.Start(ctx, "usecase.create_chain")
+	ctx, span := ucase.tr.Start(ctx, "CreateBlockchainUcase.Handle")
 	defer span.End()
+
+	// func() {
+	// 	_, span := ucase.tr.Start(ctx, "test")
+	// 	time.Sleep(2 * time.Second)
+	// 	span.End()
+	// }()
 
 	if err := ucase.bc.Create(ctx, addr); err != nil {
 		err = fmt.Errorf("blockchain.create: %w", err)

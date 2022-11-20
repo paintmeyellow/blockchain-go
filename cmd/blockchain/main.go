@@ -59,18 +59,18 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer db.Close()
 
 	// setup dependencies
 	bc := blockchain.New(db)
-	opened, err := blockchain.Open(db)
-	if err != nil {
+	if bc.Open(); err != nil {
 		log.Fatalln(err)
 	}
 
 	// create and start CLI
 	client := cli.New(
-		usecase.NewGetBalanceUcase(opened),
-		usecase.NewPayToUcase(opened),
+		usecase.NewGetBalanceUcase(bc),
+		usecase.NewPayToUcase(bc),
 		usecase.NewCreateBlockchainUcase(bc),
 	)
 	if err := client.Run(context.Background()); err != nil {

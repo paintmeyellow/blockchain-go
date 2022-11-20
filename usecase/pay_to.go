@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"blockchain-go/blockchain"
@@ -30,7 +31,7 @@ func NewPayToUcase(bc PayToBC) *PayToUcase {
 }
 
 func (ucase PayToUcase) Handle(ctx context.Context, from, to string, amount int) error {
-	ctx, span := ucase.tr.Start(ctx, "usecase.pay_to")
+	ctx, span := ucase.tr.Start(ctx, "PayToUcase.Handle")
 	defer span.End()
 
 	acc, utxo := ucase.bc.SpendableOutputs(ctx, from, amount)
@@ -40,11 +41,13 @@ func (ucase PayToUcase) Handle(ctx context.Context, from, to string, amount int)
 	}
 	tx, err := blockchain.NewTx(from, to, amount, acc, utxo)
 	if err != nil {
+		span.SetStatus(codes.Error, "create new tx")
 		span.RecordError(err)
 		return err
 	}
 	span.AddEvent("mining block")
 	if err = ucase.bc.MineBlock(ctx, []*blockchain.Tx{tx}); err != nil {
+		span.SetStatus(codes.Error, "mine block")
 		span.RecordError(err)
 		return err
 	}

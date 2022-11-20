@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"blockchain-go/blockchain"
 )
@@ -15,10 +15,14 @@ type GetBalanceBC interface {
 
 type GetBalanceUcase struct {
 	bc GetBalanceBC
+	tr trace.Tracer
 }
 
 func NewGetBalanceUcase(bc GetBalanceBC) *GetBalanceUcase {
-	return &GetBalanceUcase{bc: bc}
+	return &GetBalanceUcase{
+		bc: bc,
+		tr: otel.Tracer("usecase"),
+	}
 }
 
 type Balance struct {
@@ -26,9 +30,8 @@ type Balance struct {
 }
 
 func (ucase *GetBalanceUcase) Handle(ctx context.Context, addr string) *Balance {
-	_, span := otel.Tracer("usecase").Start(ctx, "usecase.get_balance")
+	ctx, span := ucase.tr.Start(ctx, "GetBalanceUcase.Handle")
 	defer span.End()
-	span.SetAttributes(attribute.String("addr", addr))
 
 	var balance int
 	utxo := ucase.bc.UTXO(ctx, addr)
