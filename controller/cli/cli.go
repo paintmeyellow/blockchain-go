@@ -88,6 +88,7 @@ func (cli *cli) payto(ctx context.Context) (*cobra.Command, error) {
 			defer span.End()
 			if err := cli.payToUcase.Handle(ctx, from, to, amount); err != nil {
 				span.RecordError(err)
+				cmd.PrintErrf("operation failed: %s", err)
 				return
 			}
 			cmd.Println("Success!")
@@ -119,6 +120,7 @@ func (cli *cli) createChain(ctx context.Context) (*cobra.Command, error) {
 			if err := cli.createBlockchainUcase.Handle(ctx, addr); err != nil {
 				span.SetStatus(codes.Error, "operation failed")
 				span.RecordError(err)
+				cmd.PrintErrf("operation failed: %s", err)
 				return
 			}
 			cmd.Println("Success!")

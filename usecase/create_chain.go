@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
@@ -27,12 +26,12 @@ func NewCreateBlockchainUcase(bc *blockchain.Blockchain) *CreateBlockchainUcase 
 func (ucase *CreateBlockchainUcase) Handle(ctx context.Context, addr string) error {
 	ctx, span := ucase.tr.Start(ctx, "usecase.create_chain")
 	defer span.End()
-	span.SetAttributes(attribute.String("addr", addr))
 
-	err := ucase.bc.Create(ctx, addr)
-	if err != nil {
+	if err := ucase.bc.Create(ctx, addr); err != nil {
+		err = fmt.Errorf("blockchain.create: %w", err)
 		span.SetStatus(codes.Error, "operation failed")
-		span.RecordError(fmt.Errorf("bc.Create: %w", err))
+		span.RecordError(err)
+		return err
 	}
-	return err
+	return nil
 }
